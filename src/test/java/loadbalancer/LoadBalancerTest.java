@@ -212,6 +212,21 @@ class LoadBalancerTest {
     }
 
     @Test
+    void benchmarkTokenSkipsTheLimitAndIsNotForwarded() throws Exception {
+        start(new RateLimiter(1, 0.5));
+        assertEquals(200, send("GET", "/", null).statusCode());
+        assertEquals(429, send("GET", "/", null).statusCode());
+        URI uri = URI.create("http://127.0.0.1:" + balancer.port() + "/");
+        HttpRequest guess = HttpRequest.newBuilder(uri).header("X-LB-Benchmark", "not-the-secret").build();
+        assertEquals(429, client.send(guess, HttpResponse.BodyHandlers.ofString()).statusCode());
+        HttpRequest trusted = HttpRequest.newBuilder(uri).header("X-LB-Benchmark", balancer.benchmarkToken).build();
+        assertEquals(200, client.send(trusted, HttpResponse.BodyHandlers.ofString()).statusCode());
+        Stub served = stubs.get(0).hits.get() + stubs.get(1).hits.get() == 2 && stubs.get(1).hits.get() == 1
+                ? stubs.get(1) : stubs.get(0);
+        assertNull(served.lastHeaders.getFirst("X-LB-Benchmark"), "the secret must not reach a backend");
+    }
+
+    @Test
     void redirectsAreRelayedNotFollowed() throws Exception {
         start(unlimited());
         HttpResponse<String> response = send("GET", "/redirect", null);

@@ -16,7 +16,7 @@ public final class Main {
               --port <n>           proxy port (default 8000)
               --admin <n>          dashboard port, loopback only (default 8001)
               --bind <address>     proxy bind address (default 127.0.0.1)
-              --algorithm <name>   round-robin or least-connections (default round-robin)
+              --algorithm <name>   round-robin, least-connections or least-latency (default round-robin)
               --rate <n>           requests per second allowed per client IP, 0 disables (default 50)
               --burst <n>          bucket size, the burst a client may send at once (default 100)
               --health <seconds>   interval between health checks (default 2)

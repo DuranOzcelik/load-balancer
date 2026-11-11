@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -53,6 +55,42 @@ class BalancerTest {
     void leastConnectionsBreaksTiesInRotation() {
         Balancer balancer = new Balancer(List.of(a, b, c), Balancer.Algorithm.LEAST_CONNECTIONS);
         assertEquals(List.of("a", "b", "c"), picks(balancer, 3)); // not "a" three times
+    }
+
+    private static final long SECOND = 1_000_000_000L;
+    private static final long MILLI = 1_000_000L;
+
+    @Test
+    void leastLatencyAvoidsTheSlowBackend() {
+        AtomicLong now = new AtomicLong(SECOND);
+        Balancer balancer = new Balancer(List.of(a, b, c), Balancer.Algorithm.LEAST_LATENCY, new Random(7), now::get);
+        a.recordLatency(10 * MILLI, now.get());
+        b.recordLatency(12 * MILLI, now.get());
+        c.recordLatency(120 * MILLI, now.get());
+        List<String> names = picks(balancer, 300);
+        assertFalse(names.contains("c"), "whichever backend c is compared with is faster");
+        assertTrue(names.contains("a") && names.contains("b"));
+    }
+
+    @Test
+    void leastLatencyTriesAnUnmeasuredBackendAndWeighsTheQueue() {
+        AtomicLong now = new AtomicLong(SECOND);
+        Balancer balancer = new Balancer(List.of(a, b), Balancer.Algorithm.LEAST_LATENCY, new Random(7), now::get);
+        a.recordLatency(10 * MILLI, now.get());
+        assertEquals("b", balancer.pick(Set.of()).name, "b has never been measured, so it gets a first request");
+        b.recordLatency(10 * MILLI, now.get());
+        a.inFlight.set(4); // same speed, but a already has four requests waiting
+        assertEquals("b", balancer.pick(Set.of()).name);
+    }
+
+    @Test
+    void latencyEstimateSmoothsSamplesAndFadesWhenIdle() {
+        a.recordLatency(100 * MILLI, SECOND);
+        assertEquals(100.0, a.latencyEstimate(SECOND), 0.001);
+        a.recordLatency(200 * MILLI, SECOND);
+        assertEquals(130.0, a.latencyEstimate(SECOND), 0.001, "one slow sample moves the average only part of the way");
+        assertEquals(65.0, a.latencyEstimate(6 * SECOND), 0.001, "half-life of five seconds");
+        assertTrue(a.latencyEstimate(120 * SECOND) < 0.01, "a long-idle backend looks cheap again and gets re-tried");
     }
 
     @Test

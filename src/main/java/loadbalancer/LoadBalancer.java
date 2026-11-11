@@ -34,12 +34,17 @@ final class LoadBalancer implements AutoCloseable {
     // (RFC 9110 7.6.1). host/content-length/expect are set by the HTTP client itself.
     private static final Set<String> NOT_FORWARDED = Set.of("connection", "keep-alive", "proxy-authenticate",
             "proxy-authorization", "proxy-connection", "te", "trailer", "transfer-encoding", "upgrade",
-            "host", "content-length", "expect");
+            "host", "content-length", "expect", "x-lb-benchmark");
 
     final Balancer balancer;
     final RateLimiter limiter;
     final LongAdder limited = new LongAdder();
     final LongAdder errors = new LongAdder();
+    /**
+     * Random secret that lets the built-in benchmark skip the rate limiter. It never leaves
+     * this process: the header is stripped before a request is forwarded.
+     */
+    final String benchmarkToken = java.util.UUID.randomUUID().toString();
 
     private final HttpServer server;
     private final HttpClient client = HttpClient.newBuilder()
@@ -85,7 +90,8 @@ final class LoadBalancer implements AutoCloseable {
             // Keyed by the socket's address. X-Forwarded-For is client-controlled and trivial to
             // spoof, so trusting it here would let anyone dodge the limit.
             String clientIp = exchange.getRemoteAddress().getAddress().getHostAddress();
-            long waitMillis = limiter.acquire(clientIp);
+            boolean benchmark = benchmarkToken.equals(exchange.getRequestHeaders().getFirst("X-LB-Benchmark"));
+            long waitMillis = benchmark ? 0 : limiter.acquire(clientIp);
             if (waitMillis > 0) {
                 limited.increment();
                 exchange.getResponseHeaders().set("Retry-After", Long.toString((waitMillis + 999) / 1000));
@@ -118,7 +124,9 @@ final class LoadBalancer implements AutoCloseable {
                     response = client.send(forward(exchange, backend, method, body, clientIp),
                             HttpResponse.BodyHandlers.ofByteArray());
                     backend.requests.increment();
-                    backend.nanos.add(System.nanoTime() - startedAt);
+                    long finishedAt = System.nanoTime();
+                    backend.nanos.add(finishedAt - startedAt);
+                    backend.recordLatency(finishedAt - startedAt, finishedAt);
                     retry = false;
                 } catch (IllegalArgumentException e) { // e.g. a method the client library refuses
                     reply(exchange, 400, "bad request\n");
