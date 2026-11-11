@@ -3,101 +3,151 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Load balancer dashboard</title>
+<title>Load balancer</title>
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --line: #2b323c; --text: #e6edf3; --muted: #8b949e;
-    --accent: #58a6ff; --ok: #3fb950; --bad: #f85149;
-    --s0: #58a6ff; --s1: #3fb950; --s2: #bc8cff; --s3: #f0883e; --s4: #39c5cf;
-    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
-  }
-  @media (prefers-color-scheme: light) {
-    :root { --bg: #f6f8fa; --panel: #fff; --line: #d0d7de; --text: #1f2328; --muted: #59636e;
-            --accent: #0969da; --ok: #1a7f37; --bad: #cf222e;
-            --s0: #0969da; --s1: #1a7f37; --s2: #8250df; --s3: #bc4c00; --s4: #1b7c83; }
+    --ground: #edf0f3; --sheet: #ffffff; --ink: #0f1e2b; --soft: #4d5d6b; --rule: #c6cfd8; --rule-soft: #dde3e9;
+    --flow: #1b5bd1; --flow-tint: #dbe6fb; --up: #16794a; --down: #bf2f27; --down-tint: #f7dedc; --held: #9a5b00;
+    --s0: #1b5bd1; --s1: #0b8a85; --s2: #6f7d12; --s3: #5b6b7a; --s4: #7a4a1d;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", "SF Mono", Consolas, ui-monospace, monospace;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
-  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 56px; }
-  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
-  h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
-  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
-       margin: 0 0 10px; font-weight: 600; }
-  .muted { color: var(--muted); }
-  .mono { font-family: var(--mono); }
-  .grid { display: grid; gap: 10px; margin-top: 10px; }
-  .tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-top: 0; }
-  .cards { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
-  .value { font: 600 26px var(--mono); font-variant-numeric: tabular-nums; }
-  .controls { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-end; }
-  .group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  button { font: 600 13px system-ui, sans-serif; color: var(--text); background: var(--bg);
-           border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
-  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button:disabled { opacity: .55; cursor: progress; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  svg { display: block; width: 100%; height: 140px; }
-  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
-  .swatch { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
-  .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .name { font: 600 15px var(--mono); }
-  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; background: var(--ok); }
-  .down .dot { background: var(--bad); }
-  .state { font-size: 12px; font-weight: 600; color: var(--ok); }
-  .down .state { color: var(--bad); }
-  dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 10px 0 0; font-size: 13px; }
-  dt { color: var(--muted); } dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
-  .share { height: 4px; border-radius: 2px; background: var(--line); margin-top: 10px; overflow: hidden; }
-  .share div { height: 100%; }
-  .card-foot { margin-top: 12px; }
+  html { scrollbar-color: var(--rule) var(--ground); }
+  ::selection { background: var(--flow); color: #fff; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 14px/1.5 var(--sans); }
+  main { max-width: 1160px; margin: 0 auto; padding: 0 24px 72px; }
+  .mono, td, .facts b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  header { display: flex; align-items: baseline; gap: 8px 28px; flex-wrap: wrap; padding: 22px 0 18px; border-bottom: 1px solid var(--ink); }
+  h1 { font: 650 20px var(--sans); margin: 0; letter-spacing: -0.01em; }
+  .where { color: var(--soft); }
+  .facts { display: flex; gap: 6px 28px; flex-wrap: wrap; margin-left: auto; color: var(--soft); }
+  .facts b { font-weight: 600; font-size: 14px; color: var(--ink); margin-right: 6px; }
+  .facts .alarm b { color: var(--down); }
+
+  h2 { font: 650 16px var(--sans); margin: 0; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 36px 0 12px; }
+  .head span, .note { color: var(--soft); font-size: 13px; }
+  .note { margin: 0 0 12px; max-width: 78ch; }
+
+  /* traffic map */
+  .map { background: var(--sheet); border: 1px solid var(--rule); border-radius: 4px; margin-top: 24px; padding: 6px 0; }
+  .map svg { display: block; width: 100%; height: auto; }
+  .map text { font: 13px var(--sans); fill: var(--ink); }
+  .map .small { font: 12px var(--mono); fill: var(--soft); }
+  .map .node { fill: var(--sheet); stroke: var(--ink); stroke-width: 1.25; }
+  .map .node.dead { stroke: var(--down); fill: var(--down-tint); }
+  .map .core { fill: var(--ink); }
+  .map .core-text { fill: #fff; font-weight: 650; }
+  .map .core-sub { fill: #b9c6d2; font: 12px var(--mono); }
+  .map .link { fill: none; stroke: var(--flow); stroke-linecap: round; opacity: .85; }
+  .map .link.dead { stroke: var(--down); stroke-dasharray: 5 6; opacity: 1; }
+  .map .link.held { stroke: var(--held); stroke-dasharray: 2 6; }
+
+  /* controls */
+  .controls { display: flex; gap: 14px 40px; flex-wrap: wrap; align-items: end; margin-top: 22px; }
+  .controls label, .legend-title { display: block; font: 600 12px var(--sans); color: var(--soft); margin-bottom: 6px; }
+  .segmented { display: inline-flex; border: 1px solid var(--ink); border-radius: 5px; overflow: hidden; }
+  .segmented button { border: 0; border-left: 1px solid var(--ink); border-radius: 0; }
+  .segmented button:first-child { border-left: 0; }
+  button { font: 600 13px var(--sans); color: var(--ink); background: var(--sheet); border: 1px solid var(--ink); border-radius: 5px;
+           padding: 7px 13px; cursor: pointer; transition: background .16s, color .16s; }
+  button:hover { background: var(--flow-tint); }
+  button:active { background: var(--rule); }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  button:disabled { color: var(--soft); border-color: var(--rule); background: var(--ground); cursor: progress; }
+  button:focus-visible { outline: 2px solid var(--flow); outline-offset: 2px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  #burst-result { color: var(--soft); font: 13px var(--mono); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th { text-align: left; font: 600 12px var(--sans); color: var(--soft); padding: 0 16px 8px 0; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+  td { padding: 9px 16px 9px 0; border-bottom: 1px solid var(--rule-soft); white-space: nowrap; vertical-align: middle; }
+  th.r, td.r { text-align: right; }
+  td:last-child, th:last-child { padding-right: 0; }
+  .scroll { overflow-x: auto; }
+  .status { font: 600 12px var(--sans); padding: 2px 8px; border-radius: 3px; background: #dcefe4; color: var(--up); }
+  .status.dead { background: var(--down-tint); color: var(--down); }
+  .name { font-weight: 600; }
+  .name i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 8px; }
+  .share { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+  .share div { flex: 1; height: 6px; background: var(--rule-soft); }
+  .share div b { display: block; height: 100%; transition: width .25s cubic-bezier(.2, .8, .2, 1); }
+  .best td { background: #e7f3ec; }
+  .best td:first-child { font-weight: 650; }
+
+  .plot { display: grid; grid-template-columns: 44px 1fr; }
+  .axis { display: flex; flex-direction: column; justify-content: space-between; font: 11px var(--mono); color: var(--soft); padding-right: 10px; text-align: right; height: 150px; }
+  .canvas { height: 150px; border-bottom: 1px solid var(--ink); background: linear-gradient(var(--rule-soft) 1px, transparent 1px) 0 0 / 100% 25%; }
+  .canvas svg { display: block; width: 100%; height: 100%; }
+  .xaxis { grid-column: 2; display: flex; justify-content: space-between; font: 11px var(--mono); color: var(--soft); padding-top: 6px; }
+  .legend { display: flex; gap: 6px 18px; flex-wrap: wrap; color: var(--soft); font-size: 13px; margin-top: 10px; }
+  .legend i { display: inline-block; width: 14px; height: 3px; margin-right: 6px; vertical-align: middle; }
+  @media (max-width: 760px) { .facts { margin-left: 0; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
 <main>
   <header>
     <h1>Load balancer</h1>
-    <span class="muted" id="summary">connecting…</span>
+    <span class="where mono" id="where">connecting</span>
+    <div class="facts">
+      <span><b id="rps">0</b>requests / s</span>
+      <span id="healthy-fact"><b id="healthy">0 / 0</b>backends healthy</span>
+      <span><b id="limited">0</b>rejected with 429</span>
+      <span id="errors-fact"><b id="errors">0</b>gateway errors</span>
+    </div>
   </header>
 
-  <section class="grid tiles">
-    <div class="panel"><h2>Requests / sec</h2><div class="value" id="rps">–</div></div>
-    <div class="panel"><h2>Healthy backends</h2><div class="value" id="healthy">–</div></div>
-    <div class="panel"><h2>Rate limited (429)</h2><div class="value" id="limited">–</div></div>
-    <div class="panel"><h2>Gateway errors</h2><div class="value" id="errors">–</div></div>
-  </section>
+  <div class="map"><svg id="map" role="img" aria-label="Traffic from clients through the balancer to each backend"></svg></div>
 
-  <section class="panel grid">
-    <div class="controls">
-      <div>
-        <h2>Algorithm</h2>
-        <div class="group" id="algorithms">
-          <button data-algorithm="ROUND_ROBIN">Round robin</button>
-          <button data-algorithm="LEAST_CONNECTIONS">Least connections</button>
-        </div>
-      </div>
-      <div>
-        <h2>Send test traffic</h2>
-        <div class="group">
-          <button data-burst="100">100 requests</button>
-          <button data-burst="500">500 requests</button>
-          <span class="muted mono" id="burst-result" aria-live="polite"></span>
-        </div>
-      </div>
-      <div>
-        <h2>Rate limit per client</h2>
-        <div class="mono" id="rate">–</div>
+  <div class="controls">
+    <div>
+      <label id="algorithm-label">Algorithm</label>
+      <div class="segmented" id="algorithms" role="group" aria-labelledby="algorithm-label">
+        <button data-algorithm="ROUND_ROBIN">Round robin</button>
+        <button data-algorithm="LEAST_CONNECTIONS">Least connections</button>
+        <button data-algorithm="LEAST_LATENCY">Least latency</button>
       </div>
     </div>
-  </section>
+    <div>
+      <label>Send test requests</label>
+      <div class="row">
+        <button data-burst="100">100</button>
+        <button data-burst="500">500</button>
+        <span id="burst-result" aria-live="polite"></span>
+      </div>
+    </div>
+    <div>
+      <span class="legend-title">Limit per client address</span>
+      <span class="mono" id="rate"></span>
+    </div>
+  </div>
 
-  <section class="panel grid">
-    <h2>Requests per second by backend, last 60 s</h2>
-    <svg id="chart" viewBox="0 0 600 140" preserveAspectRatio="none" role="img" aria-label="Requests per second by backend"></svg>
-    <div class="legend" id="legend"></div>
-  </section>
+  <div class="head"><h2>Backends</h2><span>latency estimate is what the least latency algorithm compares</span></div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Server</th><th>State</th><th class="r">Req / s</th><th>Share of all requests</th><th class="r">In flight</th>
+        <th class="r">Avg latency</th><th class="r">Latency estimate</th><th class="r">Failed</th><th></th></tr></thead>
+      <tbody id="backends"></tbody>
+    </table>
+  </div>
 
-  <section class="grid cards" id="backends"></section>
+  <div class="head"><h2>Requests per second, last 60 s</h2><span id="peak"></span></div>
+  <div class="plot">
+    <div class="axis" id="yaxis"></div>
+    <div class="canvas"><svg id="chart" viewBox="0 0 600 150" preserveAspectRatio="none" role="img" aria-label="Requests per second by backend"></svg></div>
+    <div class="xaxis"><span>60 s ago</span><span>45</span><span>30</span><span>15</span><span>now</span></div>
+  </div>
+  <div class="legend" id="legend"></div>
+
+  <div class="head"><h2>Which algorithm is fastest here?</h2></div>
+  <p class="note">Sends the same batch of requests once per algorithm and measures how long callers waited. The run bypasses the
+    rate limit and switches the algorithm back when it is done.</p>
+  <div class="row"><button id="compare">Run comparison</button><span class="note" id="compare-state" style="margin:0" aria-live="polite"></span></div>
+  <div class="scroll" id="compare-box" style="margin-top:14px"></div>
 </main>
 
 <script>
@@ -105,10 +155,17 @@ const $ = (id) => document.getElementById(id);
 const number = new Intl.NumberFormat("en-US");
 const SVG = "http://www.w3.org/2000/svg";
 const color = (i) => `var(--s${i % 5})`;
-// server values are written with textContent, never innerHTML
+const LABEL = { ROUND_ROBIN: "Round robin", LEAST_CONNECTIONS: "Least connections", LEAST_LATENCY: "Least latency" };
+// server values are written with textContent or setAttribute, never innerHTML
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
   if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const svg = (tag, attrs, text) => {
+  const node = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs || {})) node.setAttribute(k, v);
   if (text !== undefined) node.textContent = text;
   return node;
 };
@@ -118,68 +175,91 @@ async function post(path, value) {
   return res.ok ? res.json() : null;
 }
 
+// average of the last three seconds, so the map does not flicker
+function recent(state) {
+  const rows = state.history.slice(-3);
+  return rows[0].map((_, column) => rows.reduce((sum, row) => sum + row[column], 0) / rows.length);
+}
+
+function drawMap(state, rates) {
+  const n = state.backends.length;
+  const height = Math.max(210, n * 62 + 30);
+  const mid = height / 2;
+  const total = rates.slice(0, n).reduce((a, b) => a + b, 0);
+  const rejected = rates[n];
+  const parts = [];
+  // clients -> balancer
+  parts.push(svg("path", { class: "link", d: `M150 ${mid} H380`, "stroke-width": total + rejected > 0 ? 12 : 2 }));
+  parts.push(svg("rect", { class: "node", x: 20, y: mid - 26, width: 130, height: 52, rx: 3 }));
+  parts.push(svg("text", { x: 85, y: mid - 2, "text-anchor": "middle" }, "Clients"));
+  parts.push(svg("text", { class: "small", x: 85, y: mid + 15, "text-anchor": "middle" }, number.format(Math.round(total + rejected)) + " req/s"));
+  // rejected branch
+  if (state.rateEnabled) {
+    parts.push(svg("path", { class: "link held", d: `M490 ${mid + 30} V${height - 20} H300`, "stroke-width": rejected > 0 ? 4 : 1.5 }));
+    parts.push(svg("text", { class: "small", x: 292, y: height - 16, "text-anchor": "end" }, "429 over the limit · " + number.format(Math.round(rejected)) + "/s"));
+  }
+  // balancer -> backends
+  state.backends.forEach((b, i) => {
+    const y = n === 1 ? mid : 36 + (i * (height - 72)) / (n - 1);
+    const share = total > 0 ? rates[i] / total : 0;
+    const dead = !b.healthy;
+    parts.push(svg("path", { class: "link" + (dead ? " dead" : ""), d: `M600 ${mid} C700 ${mid} 700 ${y} 800 ${y}`,
+      "stroke-width": dead ? 1.75 : 1.5 + share * 16, stroke: dead ? "" : color(i) }));
+    parts.push(svg("rect", { class: "node" + (dead ? " dead" : ""), x: 800, y: y - 22, width: 180, height: 44, rx: 3 }));
+    parts.push(svg("text", { x: 814, y: y - 2 }, b.name));
+    parts.push(svg("text", { class: "small", x: 814, y: y + 14 }, dead ? "down, no traffic" : number.format(Math.round(rates[i])) + " req/s · " + b.avgMs + " ms"));
+  });
+  parts.push(svg("rect", { class: "core", x: 380, y: mid - 30, width: 220, height: 60, rx: 3 }));
+  parts.push(svg("text", { class: "core-text", x: 490, y: mid - 4, "text-anchor": "middle" }, "Balancer"));
+  parts.push(svg("text", { class: "core-sub", x: 490, y: mid + 15, "text-anchor": "middle" }, LABEL[state.algorithm].toLowerCase()));
+  $("map").setAttribute("viewBox", `0 0 1000 ${height}`);
+  $("map").replaceChildren(...parts);
+}
+
+function niceCeiling(value) {
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(value, 1))));
+  return [1, 2, 4, 5, 10].map((m) => m * magnitude).find((c) => c >= value) || 10 * magnitude;
+}
+
 function drawChart(state) {
   const series = state.backends.length + 1; // last column is 429 responses
-  // The scale follows backend traffic. A burst of 429s is clipped at the top instead of
-  // flattening every other line.
-  const peak = Math.max(1, ...state.history.flatMap((row) => row.slice(0, -1)));
+  // The scale follows backend traffic. A burst of 429s is clipped at the top instead of flattening every other line.
+  const top = niceCeiling(Math.max(4, ...state.history.flatMap((row) => row.slice(0, -1))));
   const step = 600 / (state.history.length - 1);
   const paths = [];
   for (let s = 0; s < series; s++) {
-    const points = state.history.map((row, i) =>
-      `${(i * step).toFixed(1)},${(134 - (Math.min(row[s], peak) / peak) * 126).toFixed(1)}`);
-    const path = document.createElementNS(SVG, "path");
-    path.setAttribute("d", "M" + points.join(" L"));
-    path.setAttribute("fill", "none");
-    path.setAttribute("stroke-width", "2");
-    path.setAttribute("vector-effect", "non-scaling-stroke");
-    const limited = s === series - 1;
-    path.setAttribute("stroke", limited ? "var(--bad)" : color(s));
-    if (limited) path.setAttribute("stroke-dasharray", "5 4");
-    paths.push(path);
+    const points = state.history.map((row, i) => `${(i * step).toFixed(1)},${(150 - (Math.min(row[s], top) / top) * 150).toFixed(1)}`);
+    const held = s === series - 1;
+    paths.push(svg("path", { d: "M" + points.join(" L"), fill: "none", "stroke-width": 1.75, "vector-effect": "non-scaling-stroke",
+      "stroke-linejoin": "round", stroke: held ? "var(--held)" : color(s), "stroke-dasharray": held ? "3 4" : "" }));
   }
   $("chart").replaceChildren(...paths);
-
-  const legend = state.backends.map((b, i) => {
-    const item = el("span");
-    const swatch = el("span", "swatch"); swatch.style.background = color(i);
-    item.append(swatch, b.name);
-    return item;
-  });
-  const limited = el("span");
-  const swatch = el("span", "swatch"); swatch.style.background = "var(--bad)";
-  limited.append(swatch, "429 rate limited");
-  $("legend").replaceChildren(...legend, limited, el("span", "", "peak " + number.format(peak) + "/s"));
+  $("yaxis").replaceChildren(...[1, .75, .5, .25, 0].map((f) => el("span", "", number.format(Math.round(top * f)))));
+  const legend = state.backends.map((b, i) => { const item = el("span"); const mark = el("i"); mark.style.background = color(i); item.append(mark, b.name); return item; });
+  const held = el("span"); const mark = el("i"); mark.style.background = "var(--held)"; held.append(mark, "429 rejected (clipped to the scale)");
+  $("legend").replaceChildren(...legend, held);
 }
 
-function drawBackends(state) {
+function drawBackends(state, rates) {
   const total = state.backends.reduce((sum, b) => sum + b.requests, 0) || 1;
   $("backends").replaceChildren(...state.backends.map((b, i) => {
-    const card = el("div", "panel" + (b.healthy ? "" : " down"));
-    const head = el("div", "card-head");
-    const name = el("span", "name"); name.append(el("span", "dot"), b.name);
-    head.append(name, el("span", "state", b.healthy ? "HEALTHY" : "DOWN"));
-    const list = el("dl");
-    [["Address", b.url.replace("http://", "")], ["Requests served", number.format(b.requests)],
-     ["Share of traffic", ((b.requests / total) * 100).toFixed(1) + " %"], ["In flight", b.inFlight],
-     ["Average latency", b.avgMs + " ms"], ["Failed attempts", number.format(b.failures)]]
-      .forEach(([k, v]) => list.append(el("dt", "", k), el("dd", "", v)));
-    const share = el("div", "share"); const bar = el("div");
-    bar.style.width = (b.requests / total) * 100 + "%"; bar.style.background = color(i);
-    share.append(bar);
-    card.append(head, list, share);
+    const row = el("tr");
+    const name = el("td", "name"); const chip = el("i"); chip.style.background = color(i);
+    name.append(chip, b.name, " "); name.append(el("span", "where", b.url.replace("http://", "")));
+    const state_ = el("td"); state_.append(el("span", "status" + (b.healthy ? "" : " dead"), b.healthy ? "Healthy" : "Down"));
+    const share = el("td"); const wrap = el("div", "share"); const track = el("div"); const fill = el("b");
+    fill.style.width = (b.requests / total) * 100 + "%"; fill.style.background = color(i);
+    track.append(fill); wrap.append(track, el("span", "mono", ((b.requests / total) * 100).toFixed(1) + " %")); share.append(wrap);
+    const action = el("td", "r");
     if (b.demo) {
-      const foot = el("div", "card-foot");
-      const toggle = el("button", "", b.running ? "Stop this server" : "Start this server");
-      toggle.addEventListener("click", async () => {
-        toggle.disabled = true;
-        await post("/api/demo", i + ":" + (b.running ? "stop" : "start"));
-        refresh();
-      });
-      foot.append(toggle);
-      card.append(foot);
+      const toggle = el("button", "", b.running ? "Stop" : "Start");
+      toggle.setAttribute("aria-label", (b.running ? "Stop " : "Start ") + b.name);
+      toggle.addEventListener("click", async () => { toggle.disabled = true; await post("/api/demo", i + ":" + (b.running ? "stop" : "start")); refresh(); });
+      action.append(toggle);
     }
-    return card;
+    row.append(name, state_, el("td", "r", number.format(Math.round(rates[i]))), share, el("td", "r", b.inFlight),
+      el("td", "r", b.avgMs + " ms"), el("td", "r", b.estimateMs + " ms"), el("td", "r", number.format(b.failures)), action);
+    return row;
   }));
 }
 
@@ -188,21 +268,24 @@ async function refresh() {
   try {
     state = await fetch("/api/state").then((r) => r.json());
   } catch (err) {
-    $("summary").textContent = "admin server not reachable";
-    return;
+    $("where").textContent = "admin server not reachable";
+    return null;
   }
+  const rates = recent(state);
   const up = state.backends.filter((b) => b.healthy).length;
-  const last = state.history[state.history.length - 1];
-  $("summary").textContent = "proxy on port " + state.port;
-  $("rps").textContent = number.format(last.slice(0, -1).reduce((a, b) => a + b, 0));
+  $("where").textContent = "127.0.0.1:" + state.port;
+  $("rps").textContent = number.format(Math.round(rates.slice(0, -1).reduce((a, b) => a + b, 0)));
   $("healthy").textContent = up + " / " + state.backends.length;
+  $("healthy-fact").className = up < state.backends.length ? "alarm" : "";
   $("limited").textContent = number.format(state.limited);
   $("errors").textContent = number.format(state.errors);
-  $("rate").textContent = state.rateEnabled ? `${state.perSecond} req/s, burst ${state.burst}` : "disabled";
-  document.querySelectorAll("#algorithms button").forEach((b) =>
-    b.setAttribute("aria-pressed", String(b.dataset.algorithm === state.algorithm)));
+  $("errors-fact").className = state.errors > 0 ? "alarm" : "";
+  $("rate").textContent = state.rateEnabled ? `${state.perSecond} req/s, bursts up to ${state.burst}` : "off";
+  document.querySelectorAll("#algorithms button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.algorithm === state.algorithm)));
+  drawMap(state, rates);
+  drawBackends(state, rates);
   drawChart(state);
-  drawBackends(state);
+  return state;
 }
 
 document.querySelectorAll("#algorithms button").forEach((b) => b.addEventListener("click", async () => {
@@ -211,15 +294,39 @@ document.querySelectorAll("#algorithms button").forEach((b) => b.addEventListene
 }));
 document.querySelectorAll("[data-burst]").forEach((b) => b.addEventListener("click", async () => {
   b.disabled = true;
-  $("burst-result").textContent = "sending…";
+  $("burst-result").textContent = "sending";
   const result = await post("/api/burst", b.dataset.burst);
-  $("burst-result").textContent = result
-    ? `${result.ok} ok · ${result.limited} rate limited · ${result.failed} failed` : "request failed";
+  $("burst-result").textContent = result ? `${result.ok} served, ${result.limited} rejected, ${result.failed} failed` : "the admin server did not answer";
   b.disabled = false;
   refresh();
 }));
 
-refresh();
+async function compare() {
+  const button = $("compare");
+  button.disabled = true;
+  $("compare-state").textContent = "Running, this takes a few seconds";
+  const [report, state] = await Promise.all([post("/api/compare", 240), refresh()]);
+  button.disabled = false;
+  $("compare-state").textContent = report ? `${report.requests} requests per algorithm, 12 at a time` : "The comparison could not run.";
+  if (!report || !state) return;
+  const best = Math.min(...report.results.map((r) => r.mean));
+  const table = el("table"); const head = el("tr");
+  ["Algorithm", "Median wait", "95th percentile", "Mean wait", ...state.backends.map((b) => "to " + b.name)]
+    .forEach((h, i) => head.append(el("th", i ? "r" : "", h)));
+  const thead = el("thead"); thead.append(head);
+  const body = el("tbody");
+  report.results.forEach((r) => {
+    const row = el("tr", r.mean === best ? "best" : "");
+    row.append(el("td", "", LABEL[r.algorithm] + (r.mean === best ? "  (fastest)" : "")), el("td", "r", r.p50 + " ms"),
+      el("td", "r", r.p95 + " ms"), el("td", "r", r.mean + " ms"), ...r.served.map((count) => el("td", "r", number.format(count))));
+    body.append(row);
+  });
+  table.append(thead, body);
+  $("compare-box").replaceChildren(table);
+}
+$("compare").addEventListener("click", compare);
+
+refresh().then(() => { if (new URLSearchParams(location.search).get("compare")) compare(); });
 setInterval(refresh, 1000);
 </script>
 </body>

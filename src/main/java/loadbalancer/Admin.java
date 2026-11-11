@@ -61,6 +61,7 @@ final class Admin {
             return "{}";
         }));
         http.createContext("/api/burst", exchange -> control(exchange, value -> burst(Integer.parseInt(value))));
+        http.createContext("/api/compare", exchange -> control(exchange, value -> compare(Integer.parseInt(value))));
         http.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
         http.start();
         return http;
@@ -111,6 +112,61 @@ final class Admin {
         return "{\"ok\":" + ok + ",\"limited\":" + limited + ",\"failed\":" + failed + "}";
     }
 
+    /**
+     * Runs the same workload once per algorithm and reports latency percentiles and how the
+     * requests were spread. Only one comparison runs at a time.
+     */
+    private synchronized String compare(int count) throws InterruptedException {
+        int total = Math.max(30, Math.min(count, 1000));
+        List<Backend> backends = balancer.balancer.backends;
+        Balancer.Algorithm original = balancer.balancer.algorithm;
+        HttpRequest request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + balancer.port() + "/"))
+                .header("X-LB-Benchmark", balancer.benchmarkToken).build();
+        StringBuilder results = new StringBuilder();
+        try {
+            for (Balancer.Algorithm algorithm : Balancer.Algorithm.values()) {
+                balancer.balancer.algorithm = algorithm;
+                long[] before = backends.stream().mapToLong(b -> b.requests.sum()).toArray();
+                long[] millis = new long[total];
+                AtomicInteger failed = new AtomicInteger();
+                Semaphore concurrency = new Semaphore(12);
+                try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+                    for (int i = 0; i < total; i++) {
+                        int slot = i;
+                        concurrency.acquire();
+                        pool.submit(() -> {
+                            long started = System.nanoTime();
+                            try {
+                                if (client.send(request, HttpResponse.BodyHandlers.discarding()).statusCode() >= 400) {
+                                    failed.incrementAndGet();
+                                }
+                            } catch (IOException | InterruptedException e) {
+                                failed.incrementAndGet();
+                            } finally {
+                                millis[slot] = (System.nanoTime() - started) / 1_000_000;
+                                concurrency.release();
+                            }
+                        });
+                    }
+                }
+                Arrays.sort(millis);
+                String shares = java.util.stream.IntStream.range(0, backends.size())
+                        .mapToObj(i -> Long.toString(backends.get(i).requests.sum() - before[i]))
+                        .collect(Collectors.joining(","));
+                results.append(results.isEmpty() ? "" : ",")
+                        .append("{\"algorithm\":\"").append(algorithm).append('"')
+                        .append(",\"p50\":").append(millis[total / 2])
+                        .append(",\"p95\":").append(millis[(int) (total * 0.95)])
+                        .append(",\"mean\":").append(Math.round(Arrays.stream(millis).average().orElse(0)))
+                        .append(",\"failed\":").append(failed.get())
+                        .append(",\"served\":[").append(shares).append("]}");
+            }
+        } finally {
+            balancer.balancer.algorithm = original;
+        }
+        return "{\"requests\":" + total + ",\"results\":[" + results + "]}";
+    }
+
     private String state() {
         List<Backend> backends = balancer.balancer.backends;
         StringBuilder rows = new StringBuilder();
@@ -127,6 +183,8 @@ final class Admin {
                     .append(",\"requests\":").append(requests)
                     .append(",\"failures\":").append(backend.failures.sum())
                     .append(",\"avgMs\":").append(String.format(Locale.ROOT, "%.1f", averageMs))
+                    .append(",\"estimateMs\":")
+                    .append(String.format(Locale.ROOT, "%.1f", backend.latencyEstimate(System.nanoTime())))
                     .append(",\"demo\":").append(demo != null)
                     .append(",\"running\":").append(demo != null && demo.running())
                     .append('}');

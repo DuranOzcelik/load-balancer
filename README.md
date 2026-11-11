@@ -2,29 +2,36 @@
 
 An HTTP load balancer written from scratch in Java 21. It spreads requests across several
 backend servers, takes failed servers out of rotation, limits how fast each client may send
-requests, and comes with a live dashboard.
+requests, and comes with a live dashboard. It can also measure its own algorithms against
+each other on the same workload.
 
 No runtime dependencies. Only the JDK.
 
-![Dashboard: one backend is stopped and restarted, traffic moves to the others](docs/dashboard.png)
+![Dashboard: traffic map, backend table, throughput chart and the algorithm comparison](docs/dashboard.png)
 
-What the screenshot shows, left to right:
+The line widths in the map follow the traffic each backend receives. In the chart, `backend-2`
+was stopped for ten seconds: its line drops to zero, the others take over, and no request
+fails. The table at the bottom is the built-in comparison. The demo has two backends that
+answer in about 15 ms and one that takes about 125 ms:
 
-1. `backend-2` (green) is stopped. Its line drops to zero and the other two absorb the
-   traffic, with no gateway errors.
-2. It is started again and rejoins after two successful health checks.
-3. The algorithm is switched to least connections. `backend-3` (purple) answers in 125 ms
-   instead of 15 ms, so it now receives fewer requests.
-4. The red dashed line marks requests rejected with `429` when the client exceeded its limit.
+| Algorithm | Median wait | 95th percentile | Mean wait |
+|---|---|---|---|
+| Round robin | 16 ms | 134 ms | 55 ms |
+| Least connections | 15 ms | 123 ms | 24 ms |
+| Least latency | 16 ms | 32 ms | 19 ms |
+
+Round robin sends every third request to the slow server. Least connections sends fewer
+there, because slow requests stay "in flight" longer. Least latency almost stops using it.
 
 ## Features
 
 - Reverse proxy for any HTTP method, path, query string and body
-- Two algorithms, switchable at runtime: round robin and least connections
+- Three algorithms, switchable at runtime: round robin, least connections and least latency
+- A comparison run that measures each algorithm on the same batch of requests
 - Active health checks (`GET /health`) with hysteresis, plus passive detection on real traffic
 - Automatic retry on another backend, but only when repeating the request is safe
 - Token bucket rate limiter per client IP, answering `429` with a `Retry-After` header
-- Dashboard with per-backend throughput, latency and controls
+- Dashboard with a live traffic map, per-backend throughput, latency and controls
 
 ## Run
 
@@ -55,7 +62,7 @@ java -jar target/load-balancer-1.0.0.jar --backend http://127.0.0.1:9001 --backe
 | `--port <n>` | 8000 | Proxy port |
 | `--admin <n>` | 8001 | Dashboard port, loopback only |
 | `--bind <address>` | 127.0.0.1 | Proxy bind address |
-| `--algorithm <name>` | round-robin | `round-robin` or `least-connections` |
+| `--algorithm <name>` | round-robin | `round-robin`, `least-connections` or `least-latency` |
 | `--rate <n>` | 50 | Requests per second per client IP, `0` disables |
 | `--burst <n>` | 100 | Bucket size: how many requests a client may send at once |
 | `--health <seconds>` | 2 | Interval between health checks |
@@ -65,14 +72,29 @@ java -jar target/load-balancer-1.0.0.jar --backend http://127.0.0.1:9001 --backe
 ```
 LoadBalancer  accepts requests, applies the rate limit, forwards, retries
   RateLimiter token bucket per client IP
-  Balancer    picks a healthy backend (round robin / least connections)
-  Backend     address, health state, in-flight count, counters
+  Balancer    picks a healthy backend (round robin / least connections / least latency)
+  Backend     address, health state, in-flight count, latency estimate
 Admin         dashboard and control API
 DemoBackend   tiny upstream server for trying things out
 ```
 
 ## Details that were not obvious
 
+- **A latency score has to forget.** Least latency keeps a moving average of each backend's
+  response time. A backend that was slow once gets a bad score, stops receiving requests,
+  and so never produces a new measurement that could improve the score. The estimate
+  therefore fades with a half-life of five seconds while a backend is idle, until it looks
+  cheap enough to be tried again.
+- **Two random candidates beat the single best.** Always picking the backend with the lowest
+  score seems optimal, but all requests that arrive in the same instant see the same winner
+  and pile onto it. The balancer compares two random backends and takes the better one
+  ("power of two choices"), which avoids slow servers without creating that herd.
+- **Latency alone is not enough.** The score is latency multiplied by the number of requests
+  already in flight plus one, so a fast server with a long queue does not look free.
+- **The benchmark needs a way past the rate limiter.** The comparison sends hundreds of
+  requests from one address. It carries a random secret generated at startup, which the proxy
+  accepts as a bypass and removes before forwarding, so a backend never sees it and a client
+  cannot guess it.
 - **When a retry is safe.** If a backend fails, sending the request to another one sounds
   harmless, but a `POST /pay` might already have been processed before the connection broke.
   The proxy retries any method if the connection was *never established* (the backend saw
@@ -107,7 +129,8 @@ DemoBackend   tiny upstream server for trying things out
 mvn test
 ```
 
-21 tests: the rate limiter with a fake clock, backend selection and health state, and
+25 tests: the rate limiter with a fake clock, backend selection, the latency estimate and
+its decay, health state, and
 integration tests where the proxy runs against real HTTP servers, including one that accepts
 a connection and hangs up without answering.
 
