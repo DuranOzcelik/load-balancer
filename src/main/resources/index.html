@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Load balancer dashboard</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #2b323c; --text: #e6edf3; --muted: #8b949e;
+    --accent: #58a6ff; --ok: #3fb950; --bad: #f85149;
+    --s0: #58a6ff; --s1: #3fb950; --s2: #bc8cff; --s3: #f0883e; --s4: #39c5cf;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f6f8fa; --panel: #fff; --line: #d0d7de; --text: #1f2328; --muted: #59636e;
+            --accent: #0969da; --ok: #1a7f37; --bad: #cf222e;
+            --s0: #0969da; --s1: #1a7f37; --s2: #8250df; --s3: #bc4c00; --s4: #1b7c83; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 56px; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted);
+       margin: 0 0 10px; font-weight: 600; }
+  .muted { color: var(--muted); }
+  .mono { font-family: var(--mono); }
+  .grid { display: grid; gap: 10px; margin-top: 10px; }
+  .tiles { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); margin-top: 0; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+  .value { font: 600 26px var(--mono); font-variant-numeric: tabular-nums; }
+  .controls { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-end; }
+  .group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  button { font: 600 13px system-ui, sans-serif; color: var(--text); background: var(--bg);
+           border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: .55; cursor: progress; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg { display: block; width: 100%; height: 140px; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .swatch { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+  .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .name { font: 600 15px var(--mono); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; background: var(--ok); }
+  .down .dot { background: var(--bad); }
+  .state { font-size: 12px; font-weight: 600; color: var(--ok); }
+  .down .state { color: var(--bad); }
+  dl { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin: 10px 0 0; font-size: 13px; }
+  dt { color: var(--muted); } dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+  .share { height: 4px; border-radius: 2px; background: var(--line); margin-top: 10px; overflow: hidden; }
+  .share div { height: 100%; }
+  .card-foot { margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Load balancer</h1>
+    <span class="muted" id="summary">connecting…</span>
+  </header>
+
+  <section class="grid tiles">
+    <div class="panel"><h2>Requests / sec</h2><div class="value" id="rps">–</div></div>
+    <div class="panel"><h2>Healthy backends</h2><div class="value" id="healthy">–</div></div>
+    <div class="panel"><h2>Rate limited (429)</h2><div class="value" id="limited">–</div></div>
+    <div class="panel"><h2>Gateway errors</h2><div class="value" id="errors">–</div></div>
+  </section>
+
+  <section class="panel grid">
+    <div class="controls">
+      <div>
+        <h2>Algorithm</h2>
+        <div class="group" id="algorithms">
+          <button data-algorithm="ROUND_ROBIN">Round robin</button>
+          <button data-algorithm="LEAST_CONNECTIONS">Least connections</button>
+        </div>
+      </div>
+      <div>
+        <h2>Send test traffic</h2>
+        <div class="group">
+          <button data-burst="100">100 requests</button>
+          <button data-burst="500">500 requests</button>
+          <span class="muted mono" id="burst-result" aria-live="polite"></span>
+        </div>
+      </div>
+      <div>
+        <h2>Rate limit per client</h2>
+        <div class="mono" id="rate">–</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel grid">
+    <h2>Requests per second by backend, last 60 s</h2>
+    <svg id="chart" viewBox="0 0 600 140" preserveAspectRatio="none" role="img" aria-label="Requests per second by backend"></svg>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="grid cards" id="backends"></section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const number = new Intl.NumberFormat("en-US");
+const SVG = "http://www.w3.org/2000/svg";
+const color = (i) => `var(--s${i % 5})`;
+// server values are written with textContent, never innerHTML
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+async function post(path, value) {
+  const res = await fetch(path, { method: "POST", headers: { "X-Admin": "1" }, body: String(value) });
+  return res.ok ? res.json() : null;
+}
+
+function drawChart(state) {
+  const series = state.backends.length + 1; // last column is 429 responses
+  // The scale follows backend traffic. A burst of 429s is clipped at the top instead of
+  // flattening every other line.
+  const peak = Math.max(1, ...state.history.flatMap((row) => row.slice(0, -1)));
+  const step = 600 / (state.history.length - 1);
+  const paths = [];
+  for (let s = 0; s < series; s++) {
+    const points = state.history.map((row, i) =>
+      `${(i * step).toFixed(1)},${(134 - (Math.min(row[s], peak) / peak) * 126).toFixed(1)}`);
+    const path = document.createElementNS(SVG, "path");
+    path.setAttribute("d", "M" + points.join(" L"));
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke-width", "2");
+    path.setAttribute("vector-effect", "non-scaling-stroke");
+    const limited = s === series - 1;
+    path.setAttribute("stroke", limited ? "var(--bad)" : color(s));
+    if (limited) path.setAttribute("stroke-dasharray", "5 4");
+    paths.push(path);
+  }
+  $("chart").replaceChildren(...paths);
+
+  const legend = state.backends.map((b, i) => {
+    const item = el("span");
+    const swatch = el("span", "swatch"); swatch.style.background = color(i);
+    item.append(swatch, b.name);
+    return item;
+  });
+  const limited = el("span");
+  const swatch = el("span", "swatch"); swatch.style.background = "var(--bad)";
+  limited.append(swatch, "429 rate limited");
+  $("legend").replaceChildren(...legend, limited, el("span", "", "peak " + number.format(peak) + "/s"));
+}
+
+function drawBackends(state) {
+  const total = state.backends.reduce((sum, b) => sum + b.requests, 0) || 1;
+  $("backends").replaceChildren(...state.backends.map((b, i) => {
+    const card = el("div", "panel" + (b.healthy ? "" : " down"));
+    const head = el("div", "card-head");
+    const name = el("span", "name"); name.append(el("span", "dot"), b.name);
+    head.append(name, el("span", "state", b.healthy ? "HEALTHY" : "DOWN"));
+    const list = el("dl");
+    [["Address", b.url.replace("http://", "")], ["Requests served", number.format(b.requests)],
+     ["Share of traffic", ((b.requests / total) * 100).toFixed(1) + " %"], ["In flight", b.inFlight],
+     ["Average latency", b.avgMs + " ms"], ["Failed attempts", number.format(b.failures)]]
+      .forEach(([k, v]) => list.append(el("dt", "", k), el("dd", "", v)));
+    const share = el("div", "share"); const bar = el("div");
+    bar.style.width = (b.requests / total) * 100 + "%"; bar.style.background = color(i);
+    share.append(bar);
+    card.append(head, list, share);
+    if (b.demo) {
+      const foot = el("div", "card-foot");
+      const toggle = el("button", "", b.running ? "Stop this server" : "Start this server");
+      toggle.addEventListener("click", async () => {
+        toggle.disabled = true;
+        await post("/api/demo", i + ":" + (b.running ? "stop" : "start"));
+        refresh();
+      });
+      foot.append(toggle);
+      card.append(foot);
+    }
+    return card;
+  }));
+}
+
+async function refresh() {
+  let state;
+  try {
+    state = await fetch("/api/state").then((r) => r.json());
+  } catch (err) {
+    $("summary").textContent = "admin server not reachable";
+    return;
+  }
+  const up = state.backends.filter((b) => b.healthy).length;
+  const last = state.history[state.history.length - 1];
+  $("summary").textContent = "proxy on port " + state.port;
+  $("rps").textContent = number.format(last.slice(0, -1).reduce((a, b) => a + b, 0));
+  $("healthy").textContent = up + " / " + state.backends.length;
+  $("limited").textContent = number.format(state.limited);
+  $("errors").textContent = number.format(state.errors);
+  $("rate").textContent = state.rateEnabled ? `${state.perSecond} req/s, burst ${state.burst}` : "disabled";
+  document.querySelectorAll("#algorithms button").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.algorithm === state.algorithm)));
+  drawChart(state);
+  drawBackends(state);
+}
+
+document.querySelectorAll("#algorithms button").forEach((b) => b.addEventListener("click", async () => {
+  await post("/api/algorithm", b.dataset.algorithm);
+  refresh();
+}));
+document.querySelectorAll("[data-burst]").forEach((b) => b.addEventListener("click", async () => {
+  b.disabled = true;
+  $("burst-result").textContent = "sending…";
+  const result = await post("/api/burst", b.dataset.burst);
+  $("burst-result").textContent = result
+    ? `${result.ok} ok · ${result.limited} rate limited · ${result.failed} failed` : "request failed";
+  b.disabled = false;
+  refresh();
+}));
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
